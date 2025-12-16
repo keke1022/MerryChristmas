@@ -1,0 +1,7 @@
+{
+  "name": "Grand Luxury Christmas Tree",
+  "description": "A Trump-style luxury interactive 3D Christmas experience using React Three Fiber and Hand Tracking.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
