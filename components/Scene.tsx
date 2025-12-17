@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, Suspense } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Environment, PerspectiveCamera, Stars } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
@@ -6,22 +6,24 @@ import * as THREE from 'three';
 import { Foliage } from './Foliage';
 import { Ornaments } from './Ornaments';
 import { Topper } from './Topper';
+import { PolaroidPhotos } from './PolaroidPhotos';
 import { TreeState, HandGesture } from '../types';
 import { CONFIG, COLORS } from '../constants';
 
 interface SceneProps {
   treeState: TreeState;
   gesture: HandGesture | null;
+  onSelectPhoto?: (photo: { src: string; caption?: string }) => void;
 }
 
-export const Scene: React.FC<SceneProps> = ({ treeState, gesture }) => {
+export const Scene: React.FC<SceneProps> = ({ treeState, gesture, onSelectPhoto }) => {
   const cameraRef = useRef<THREE.PerspectiveCamera>(null);
   const groupRef = useRef<THREE.Group>(null);
   
   // Camera animation based on hand gesture
   useFrame((state) => {
     if (cameraRef.current) {
-      const { x, y } = gesture || { x: 0, y: 0 };
+      const { x, y } = gesture?.position ?? { x: 0, y: 0 };
       
       // Smoothly interpolate camera position based on hand
       // Base pos is [0, 4, 25] (Zoomed out from 20 to 25)
@@ -90,12 +92,19 @@ export const Scene: React.FC<SceneProps> = ({ treeState, gesture }) => {
           color={COLORS.gold} 
           scale={0.35} // REDUCED SIZE
         />
+
+        {/* Avoid suspending the entire scene while photo textures load */}
+        {onSelectPhoto && (
+          <Suspense fallback={null}>
+            <PolaroidPhotos treeState={treeState} onSelect={onSelectPhoto} />
+          </Suspense>
+        )}
         
         {/* ADD TOPPER */}
         <Topper treeState={treeState} />
       </group>
 
-      <EffectComposer disableNormalPass>
+      <EffectComposer enableNormalPass={false}>
         <Bloom 
           luminanceThreshold={CONFIG.bloom.threshold} 
           mipmapBlur 

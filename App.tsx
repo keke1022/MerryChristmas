@@ -11,13 +11,23 @@ const App = () => {
   const [treeState, setTreeState] = useState<TreeState>(TreeState.CHAOS); // Start chaotic
   const [gesture, setGesture] = useState<HandGesture | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>('');
+  const [selectedPhoto, setSelectedPhoto] = useState<{ src: string; caption?: string } | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
-  const requestRef = useRef<number>();
+  const requestRef = useRef<number | null>(null);
 
   const startExperience = async () => {
     setAppState(AppState.LOADING);
+    setErrorMsg('');
     try {
+      // If the environment has no camera APIs, skip detection (manual mode) instead of erroring.
+      const mediaDevices = navigator.mediaDevices;
+      const hasGetUserMedia = typeof mediaDevices?.getUserMedia === 'function';
+      if (!hasGetUserMedia) {
+        setAppState(AppState.RUNNING);
+        return;
+      }
+
       await visionService.initialize();
       if (videoRef.current) {
         await visionService.startCamera(videoRef.current);
@@ -27,7 +37,20 @@ const App = () => {
       loop();
     } catch (e: any) {
       console.error(e);
-      setErrorMsg(e.message || "Failed to start camera or load AI models.");
+      const errName = String(e?.name || '');
+      const cameraRelated =
+        errName === 'NotFoundError' ||
+        errName === 'NotAllowedError' ||
+        errName === 'NotReadableError' ||
+        errName === 'OverconstrainedError' ||
+        errName === 'SecurityError';
+
+      if (cameraRelated) {
+        setAppState(AppState.RUNNING);
+        return;
+      }
+
+      setErrorMsg(e?.message || 'Failed to start camera or load AI models.');
       setAppState(AppState.ERROR);
     }
   };
@@ -36,7 +59,11 @@ const App = () => {
     if (visionService.isRunning) {
       const result = visionService.detect();
       if (result) {
-        setGesture(result);
+        setGesture({
+          isOpen: result.isOpen,
+          position: { x: result.x, y: result.y },
+          detected: result.detected,
+        });
         if (result.detected) {
           // Logic: Open Hand = Unleash (Chaos), Closed Hand = Form Tree
           // We add a slight debounce or direct mapping? 
@@ -64,10 +91,56 @@ const App = () => {
       {/* 3D Canvas */}
       <Canvas shadows dpr={[1, 2]}>
         <Suspense fallback={null}>
-          <Scene treeState={treeState} gesture={gesture} />
+          <Scene
+            treeState={treeState}
+            gesture={gesture}
+            onSelectPhoto={(photo) => setSelectedPhoto(photo)}
+          />
         </Suspense>
       </Canvas>
       <Loader />
+
+      {/* Fullscreen photo zoom (click anywhere to close) */}
+      {selectedPhoto && (
+        <div
+          className="absolute inset-0 z-[999] bg-black/70 backdrop-blur-sm flex items-center justify-center pointer-events-auto"
+          onClick={() => setSelectedPhoto(null)}
+          role="button"
+          aria-label="Close photo"
+        >
+          <div
+            className="bg-white shadow-[0_20px_60px_rgba(0,0,0,0.6)] border border-black/10"
+            style={{
+              padding: 14,
+              paddingBottom: 40,
+              borderRadius: 2,
+              transform: 'rotate(-1deg)',
+              maxWidth: 'min(92vw, 1200px)',
+              maxHeight: 'min(92vh, 900px)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={selectedPhoto.src}
+              alt={selectedPhoto.caption ?? 'photo'}
+              draggable={false}
+              style={{
+                width: 'auto',
+                height: 'auto',
+                maxWidth: 'min(88vw, 1160px)',
+                maxHeight: 'min(78vh, 780px)',
+                display: 'block',
+              }}
+            />
+            <div className="text-black/80 mt-3 text-center luxury-serif">
+              {selectedPhoto.caption ?? ''}
+            </div>
+            <div className="text-black/50 mt-1 text-center text-xs">
+              点击任意位置关闭
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hidden Video Element for MediaPipe */}
       <video 
