@@ -118,7 +118,6 @@ const App = () => {
               maxWidth: 'min(92vw, 1200px)',
               maxHeight: 'min(92vh, 900px)',
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             <img
               src={selectedPhoto.src}
